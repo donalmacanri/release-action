@@ -1,14 +1,14 @@
-name: Merge Branch and Release
+name: _Merge and Release (Reusable)
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       source_branch:
-        description: 'Source branch to merge from (e.g., develop)'
+        description: 'Source branch to merge from'
         required: true
         type: string
       target_branch:
-        description: 'Target branch to merge into (e.g., main)'
+        description: 'Target branch to merge into'
         required: true
         type: string
       create_release:
@@ -17,7 +17,7 @@ on:
         type: boolean
         default: false
       release_tag:
-        description: 'Release tag (required if creating release, e.g., v1.0.0)'
+        description: 'Release tag (required if creating release)'
         required: false
         type: string
       release_name:

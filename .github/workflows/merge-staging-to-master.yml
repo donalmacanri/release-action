@@ -1,0 +1,28 @@
+name: Merge Staging to Master
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release with auto-generated notes'
+        required: false
+        type: boolean
+        default: true
+      release_tag:
+        description: 'Release tag (required if creating release, e.g., v1.0.0)'
+        required: false
+        type: string
+      release_name:
+        description: 'Release name (optional, defaults to tag)'
+        required: false
+        type: string
+
+jobs:
+  merge:
+    uses: ./.github/workflows/_merge-and-release.yml
+    with:
+      source_branch: staging
+      target_branch: master
+      create_release: ${{ inputs.create_release }}
+      release_tag: ${{ inputs.release_tag }}
+      release_name: ${{ inputs.release_name }}

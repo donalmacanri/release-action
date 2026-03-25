@@ -1,53 +1,75 @@
-# Merge and Release Action
+# Merge and Release Workflows
 
-A GitHub Action workflow that merges one branch into another and optionally creates a GitHub release with auto-generated release notes.
+Reusable GitHub Action workflows for merging branches with optional release creation.
 
-## Features
+## Available Workflows
 
-- Merge any source branch into a target branch
-- Optionally create a GitHub release after merge
-- Auto-generate release notes from merged PRs and commits
-- Configurable via workflow_dispatch inputs
+### 1. Merge Development to Staging
+Merges `development` → `staging`
+
+**Inputs:**
+| Input | Description | Default |
+|-------|-------------|---------|
+| `create_release` | Create a GitHub release | `false` |
+| `release_tag` | Release tag (e.g., `v1.0.0-rc.1`) | - |
+| `release_name` | Custom release name | tag value |
+
+### 2. Merge Staging to Master
+Merges `staging` → `master`
+
+**Inputs:**
+| Input | Description | Default |
+|-------|-------------|---------|
+| `create_release` | Create a GitHub release | `true` |
+| `release_tag` | Release tag (e.g., `v1.0.0`) | - |
+| `release_name` | Custom release name | tag value |
 
 ## Usage
 
-### Triggering the Workflow
-
-1. Go to the **Actions** tab in your repository
-2. Select **Merge Branch and Release** from the workflows list
+### Via GitHub UI
+1. Go to **Actions** tab
+2. Select the workflow (e.g., "Merge Staging to Master")
 3. Click **Run workflow**
-4. Fill in the inputs:
-   - **source_branch**: The branch to merge from (e.g., `develop`)
-   - **target_branch**: The branch to merge into (e.g., `main`)
-   - **create_release**: Check this to create a GitHub release
-   - **release_tag**: Required if creating a release (e.g., `v1.0.0`)
-   - **release_name**: Optional custom name for the release
+4. Fill in optional release details
+5. Click **Run workflow**
 
-### Example Scenarios
+### Via CLI
+```bash
+# Merge development to staging (no release)
+gh workflow run "Merge Development to Staging"
 
-#### Merge develop into main (no release)
-- source_branch: `develop`
-- target_branch: `main`
-- create_release: `false`
+# Merge development to staging with pre-release
+gh workflow run "Merge Development to Staging" \
+  -f create_release=true \
+  -f release_tag=v1.2.0-rc.1
 
-#### Merge and create release
-- source_branch: `develop`
-- target_branch: `main`
-- create_release: `true`
-- release_tag: `v1.2.0`
-- release_name: `Version 1.2.0`
+# Merge staging to master with release
+gh workflow run "Merge Staging to Master" \
+  -f create_release=true \
+  -f release_tag=v1.2.0 \
+  -f release_name="Version 1.2.0"
+```
 
-## Permissions
+## Architecture
 
-The workflow requires `contents: write` permission to:
-- Push merged changes to the target branch
-- Create releases and tags
+```
+_merge-and-release.yml     # Reusable workflow (workflow_call)
+    ↑
+    ├── merge-development-to-staging.yml   # Fixed: development → staging
+    └── merge-staging-to-master.yml        # Fixed: staging → master
+```
+
+The reusable workflow (`_merge-and-release.yml`) contains all the merge logic. The caller workflows have **fixed source and target branches** that cannot be changed without modifying the workflow files.
+
+## Branch Protection
+
+If you have branch protection rules, add `github-actions[bot]` to "Allow specified actors to bypass required pull requests" in your branch protection settings.
 
 ## Auto-Generated Release Notes
 
-When creating a release, GitHub automatically generates release notes that include:
-- List of merged pull requests since the last release
+When creating a release, GitHub automatically generates notes including:
+- Merged pull requests since the last release
 - New contributors
 - Full changelog link
 
-You can customize the format by adding a `.github/release.yml` file to your repository.
+Customize the format by adding `.github/release.yml` to your repository.

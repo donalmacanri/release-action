@@ -1,0 +1,28 @@
+name: Merge Development to Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release with auto-generated notes'
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Release tag (optional, e.g., v1.0.0-rc.1)'
+        required: false
+        type: string
+      release_name:
+        description: 'Release name (optional, defaults to tag)'
+        required: false
+        type: string
+
+jobs:
+  merge:
+    uses: ./.github/workflows/_merge-and-release.yml
+    with:
+      source_branch: development
+      target_branch: staging
+      create_release: ${{ inputs.create_release }}
+      release_tag: ${{ inputs.release_tag }}
+      release_name: ${{ inputs.release_name }}
