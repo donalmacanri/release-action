@@ -1,0 +1,139 @@
+name: Create Merge Draft Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Source branch to merge from'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+      target_branch:
+        description: 'Target branch to merge into'
+        required: true
+        type: choice
+        options:
+          - staging
+          - master
+      release_tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  ALLOWED_CREATORS: ${{ vars.RELEASE_MANAGERS }}
+
+jobs:
+  validate-creator:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check authorized user
+        run: |
+          ALLOWED="${{ env.ALLOWED_CREATORS }}"
+          # Default to repo owner if not set
+          if [ -z "$ALLOWED" ]; then
+            ALLOWED="${{ github.repository_owner }}"
+          fi
+
+          if [[ ! ",$ALLOWED," =~ ",${{ github.actor }}," ]]; then
+            echo "::error::User ${{ github.actor }} is not authorized to create merge drafts"
+            echo "Authorized users: $ALLOWED"
+            exit 1
+          fi
+          echo "✓ User ${{ github.actor }} is authorized"
+
+  create-draft:
+    needs: validate-creator
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate branches
+        run: |
+          git fetch origin ${{ inputs.source_branch }} || (echo "::error::Source branch '${{ inputs.source_branch }}' not found" && exit 1)
+          git fetch origin ${{ inputs.target_branch }} || (echo "::error::Target branch '${{ inputs.target_branch }}' not found" && exit 1)
+
+      - name: Generate merge preview
+        id: preview
+        run: |
+          COMMIT_COUNT=$(git rev-list --count origin/${{ inputs.target_branch }}..origin/${{ inputs.source_branch }})
+          FILES_CHANGED=$(git diff --name-only origin/${{ inputs.target_branch }}...origin/${{ inputs.source_branch }} | wc -l | tr -d ' ')
+
+          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          echo "files_changed=$FILES_CHANGED" >> $GITHUB_OUTPUT
+
+          # Generate commit list
+          COMMITS=$(git log --oneline origin/${{ inputs.target_branch }}..origin/${{ inputs.source_branch }} | head -30)
+          echo "commits<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMITS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Generate file diff summary
+          DIFF_STAT=$(git diff --stat origin/${{ inputs.target_branch }}...origin/${{ inputs.source_branch }} | tail -20)
+          echo "diff_stat<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF_STAT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: ${{ inputs.release_tag }}
+          draft: true
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Approval Required
+
+            > **Check the box below to approve and trigger the merge.**
+            > Only authorized users can approve.
+
+            - [ ] **I approve merging `${{ inputs.source_branch }}` into `${{ inputs.target_branch }}`**
+
+            ---
+
+            ## Merge Details
+
+            | | |
+            |---|---|
+            | **Source** | `${{ inputs.source_branch }}` |
+            | **Target** | `${{ inputs.target_branch }}` |
+            | **Commits** | ${{ steps.preview.outputs.commit_count }} |
+            | **Files Changed** | ${{ steps.preview.outputs.files_changed }} |
+            | **Requested By** | @${{ github.actor }} |
+
+            ### Commits
+
+            ```
+            ${{ steps.preview.outputs.commits }}
+            ```
+
+            ### Files Changed
+
+            ```
+            ${{ steps.preview.outputs.diff_stat }}
+            ```
+
+            ---
+
+            ## Auto-Generated Release Notes
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Draft Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** ${{ inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Merge:** ${{ inputs.source_branch }} → ${{ inputs.target_branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "👉 [Review and approve the draft release](https://github.com/${{ github.repository }}/releases)" >> $GITHUB_STEP_SUMMARY
