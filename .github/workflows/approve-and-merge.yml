@@ -2,7 +2,7 @@ name: Approve and Merge Release
 
 on:
   release:
-    types: [edited]
+    types: [published]
 
 env:
   ALLOWED_APPROVERS: ${{ vars.RELEASE_MANAGERS }}
@@ -16,12 +16,6 @@ jobs:
       target_branch: ${{ steps.parse.outputs.target_branch }}
 
     steps:
-      - name: Check if draft release
-        if: github.event.release.draft != true
-        run: |
-          echo "Release is not a draft, skipping"
-          exit 0
-
       - name: Check authorized approver
         id: auth
         run: |
@@ -33,13 +27,13 @@ jobs:
             ALLOWED="${{ github.repository_owner }}"
           fi
 
-          echo "Editor: $ACTOR"
+          echo "Publisher: $ACTOR"
           echo "Allowed approvers: $ALLOWED"
 
           if [[ ! ",$ALLOWED," =~ ",$ACTOR," ]]; then
-            echo "::notice::User $ACTOR is not authorized to approve - ignoring edit"
+            echo "::error::User $ACTOR is not authorized to approve releases"
             echo "authorized=false" >> $GITHUB_OUTPUT
-            exit 0
+            exit 1
           fi
 
           echo "✓ User $ACTOR is authorized"
@@ -47,7 +41,6 @@ jobs:
 
       - name: Check approval checkbox
         id: check
-        if: steps.auth.outputs.authorized == 'true'
         run: |
           BODY='${{ github.event.release.body }}'
 
@@ -57,7 +50,7 @@ jobs:
             echo "✓ Approval checkbox is checked"
             echo "approved=true" >> $GITHUB_OUTPUT
           else
-            echo "Approval checkbox not checked - ignoring edit"
+            echo "::notice::No approval checkbox found - this release was not created by the merge workflow"
             echo "approved=false" >> $GITHUB_OUTPUT
           fi
 
@@ -123,15 +116,6 @@ jobs:
         run: |
           git push origin ${{ needs.check-approval.outputs.target_branch }}
           echo "✓ Successfully merged"
-
-      - name: Publish release (remove draft status)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.release.tag_name }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
         run: |

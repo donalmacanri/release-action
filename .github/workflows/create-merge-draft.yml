@@ -93,8 +93,11 @@ jobs:
           body: |
             ## Approval Required
 
-            > **Check the box below to approve and trigger the merge.**
-            > Only authorized users can approve.
+            > **To approve this merge:**
+            > 1. Edit this release and check the box below
+            > 2. Click "Publish release"
+            >
+            > The merge will happen automatically when published by an authorized user.
 
             - [ ] **I approve merging `${{ inputs.source_branch }}` into `${{ inputs.target_branch }}`**
 
