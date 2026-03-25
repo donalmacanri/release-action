@@ -20,10 +20,12 @@ on:
         description: 'Release tag (required if creating release)'
         required: false
         type: string
+        default: ''
       release_name:
         description: 'Release name (optional, defaults to tag)'
         required: false
         type: string
+        default: ''
 
 jobs:
   merge-and-release:
