@@ -1,8 +1,6 @@
 name: Merge Branch and Release
 
 on:
-  push:
-    branches: [never-trigger-this-branch]
   workflow_dispatch:
     inputs:
       source_branch:
