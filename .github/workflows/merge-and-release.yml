@@ -1,0 +1,99 @@
+name: Merge Branch and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: 'Source branch to merge from (e.g., develop)'
+        required: true
+        type: string
+      target_branch:
+        description: 'Target branch to merge into (e.g., main)'
+        required: true
+        type: string
+      create_release:
+        description: 'Create a GitHub release with auto-generated notes'
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Release tag (required if creating release, e.g., v1.0.0)'
+        required: false
+        type: string
+      release_name:
+        description: 'Release name (optional, defaults to tag)'
+        required: false
+        type: string
+
+jobs:
+  merge-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Validate branches exist
+        run: |
+          echo "Validating source branch: ${{ inputs.source_branch }}"
+          git fetch origin ${{ inputs.source_branch }} || (echo "Source branch '${{ inputs.source_branch }}' not found" && exit 1)
+
+          echo "Validating target branch: ${{ inputs.target_branch }}"
+          git fetch origin ${{ inputs.target_branch }} || (echo "Target branch '${{ inputs.target_branch }}' not found" && exit 1)
+
+      - name: Checkout target branch
+        run: |
+          git checkout ${{ inputs.target_branch }}
+          git pull origin ${{ inputs.target_branch }}
+
+      - name: Merge source into target
+        run: |
+          echo "Merging ${{ inputs.source_branch }} into ${{ inputs.target_branch }}"
+          git merge origin/${{ inputs.source_branch }} --no-ff -m "Merge ${{ inputs.source_branch }} into ${{ inputs.target_branch }}"
+
+      - name: Push merged changes
+        run: |
+          git push origin ${{ inputs.target_branch }}
+          echo "Successfully merged ${{ inputs.source_branch }} into ${{ inputs.target_branch }}"
+
+      - name: Validate release inputs
+        if: inputs.create_release == true
+        run: |
+          if [ -z "${{ inputs.release_tag }}" ]; then
+            echo "Error: release_tag is required when create_release is true"
+            exit 1
+          fi
+
+      - name: Create GitHub Release with auto-generated notes
+        if: inputs.create_release == true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: ${{ inputs.release_name || inputs.release_tag }}
+          target_commitish: ${{ inputs.target_branch }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Merge Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Source Branch:** ${{ inputs.source_branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Branch:** ${{ inputs.target_branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release Created:** ${{ inputs.create_release }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.create_release }}" == "true" ]; then
+            echo "- **Release Tag:** ${{ inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
+          fi
