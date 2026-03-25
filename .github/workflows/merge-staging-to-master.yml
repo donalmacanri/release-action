@@ -3,6 +3,11 @@ name: Merge Staging to Master
 on:
   workflow_dispatch:
     inputs:
+      require_approval:
+        description: 'Require manual approval before merge'
+        required: false
+        type: boolean
+        default: true
       create_release:
         description: 'Create a GitHub release with auto-generated notes'
         required: false
@@ -28,6 +33,7 @@ jobs:
     with:
       source_branch: staging
       target_branch: master
+      require_approval: ${{ inputs.require_approval }}
       create_release: ${{ inputs.create_release }}
       release_tag: ${{ inputs.release_tag }}
       release_name: ${{ inputs.release_name }}

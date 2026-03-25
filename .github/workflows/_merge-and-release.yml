@@ -26,9 +26,80 @@ on:
         required: false
         type: string
         default: ''
+      require_approval:
+        description: 'Require manual approval before merge'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
+  # Preview job - shows what will be merged
+  preview:
+    runs-on: ubuntu-latest
+    outputs:
+      commit_count: ${{ steps.diff.outputs.commit_count }}
+      files_changed: ${{ steps.diff.outputs.files_changed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate merge preview
+        id: diff
+        run: |
+          git fetch origin ${{ inputs.source_branch }} ${{ inputs.target_branch }}
+
+          COMMIT_COUNT=$(git rev-list --count origin/${{ inputs.target_branch }}..origin/${{ inputs.source_branch }})
+          FILES_CHANGED=$(git diff --name-only origin/${{ inputs.target_branch }}...origin/${{ inputs.source_branch }} | wc -l | tr -d ' ')
+
+          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          echo "files_changed=$FILES_CHANGED" >> $GITHUB_OUTPUT
+
+          echo "## Merge Preview" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**${{ inputs.source_branch }}** → **${{ inputs.target_branch }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commits to merge:** $COMMIT_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "- **Files changed:** $FILES_CHANGED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ inputs.create_release }}" == "true" ]; then
+            echo "- **Release tag:** ${{ inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Release name:** ${{ inputs.release_name || inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Commits" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          git log --oneline origin/${{ inputs.target_branch }}..origin/${{ inputs.source_branch }} | head -20 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Files Changed" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          git diff --stat origin/${{ inputs.target_branch }}...origin/${{ inputs.source_branch }} | tail -20 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # Approval gate - only runs if require_approval is true
+  approval:
+    needs: preview
+    if: inputs.require_approval == true
+    runs-on: ubuntu-latest
+    environment: release-approval
+    steps:
+      - name: Approval received
+        run: |
+          echo "## Approval Received" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Approved by: **${{ github.actor }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Proceeding with merge..." >> $GITHUB_STEP_SUMMARY
+
+  # Merge job - runs after approval (or directly if no approval required)
   merge-and-release:
+    needs: [preview, approval]
+    if: always() && needs.preview.result == 'success' && (inputs.require_approval == false || needs.approval.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,13 +116,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Validate branches exist
+      - name: Fetch branches
         run: |
-          echo "Validating source branch: ${{ inputs.source_branch }}"
-          git fetch origin ${{ inputs.source_branch }} || (echo "Source branch '${{ inputs.source_branch }}' not found" && exit 1)
-
-          echo "Validating target branch: ${{ inputs.target_branch }}"
-          git fetch origin ${{ inputs.target_branch }} || (echo "Target branch '${{ inputs.target_branch }}' not found" && exit 1)
+          git fetch origin ${{ inputs.source_branch }}
+          git fetch origin ${{ inputs.target_branch }}
 
       - name: Checkout target branch
         run: |
@@ -91,7 +159,7 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Merge Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Merge Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Source Branch:** ${{ inputs.source_branch }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Target Branch:** ${{ inputs.target_branch }}" >> $GITHUB_STEP_SUMMARY
