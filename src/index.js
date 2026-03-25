@@ -1,7 +1,7 @@
 // Sample application file
 // This file exists to demonstrate the merge and release workflow
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 
 function greet(name) {
     return `Hello, ${name}! Welcome to version ${APP_VERSION}`;
@@ -24,4 +24,13 @@ function divide(a, b) {
     return a / b;
 }
 
-module.exports = { greet, add, subtract, multiply, divide, APP_VERSION };
+function power(base, exponent) {
+    return Math.pow(base, exponent);
+}
+
+function sqrt(n) {
+    if (n < 0) throw new Error('Cannot calculate square root of negative number');
+    return Math.sqrt(n);
+}
+
+module.exports = { greet, add, subtract, multiply, divide, power, sqrt, APP_VERSION };
