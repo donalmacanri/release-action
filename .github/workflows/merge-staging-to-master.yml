@@ -19,6 +19,9 @@ on:
         type: string
         default: ''
 
+permissions:
+  contents: write
+
 jobs:
   merge:
     uses: ./.github/workflows/_merge-and-release.yml
